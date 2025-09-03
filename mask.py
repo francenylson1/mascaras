@@ -174,16 +174,16 @@ while True:
             status = "ESTÁVEL" if gesto_estavel else f"DETECTANDO ({ultima_deteccao[hand_label]['contador']})"
             
             # Determinar ação baseada no gesto (apenas mão direita)
-             acao = ""
-             if gesto_estavel and hand_label == "Right":
-                 if dedos == 0:
-                     acao = "→ DIREITA"
-                 elif dedos == 5:
-                     acao = "→ ESQUERDA"
-                 else:
-                     acao = "→ SEM AÇÃO"
-             elif hand_label == "Left":
-                 acao = "→ INATIVA"
+            acao = ""
+            if gesto_estavel and hand_label == "Right":
+                if dedos == 0:
+                    acao = "→ DIREITA"
+                elif dedos == 5:
+                    acao = "→ ESQUERDA"
+                else:
+                    acao = "→ SEM AÇÃO"
+            elif hand_label == "Left":
+                acao = "→ INATIVA"
             
             cv2.putText(frame, f"{hand_label}: {dedos} dedos - {status} {acao}", 
                        (10, 30 if hand_label == "Right" else 60), 
