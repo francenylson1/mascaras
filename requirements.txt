@@ -1,0 +1,5 @@
+# Dependências do projeto de controle de máscaras
+opencv-python==4.8.1.78
+mediapipe==0.10.7
+adafruit-circuitpython-servokit==1.3.18
+numpy>=1.21.0
