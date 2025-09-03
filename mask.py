@@ -2,6 +2,7 @@ import cv2
 import mediapipe as mp
 from adafruit_servokit import ServoKit
 import math
+import time
 
 # --- Config PCA9685 ---
 kit = ServoKit(channels=16)
@@ -17,10 +18,10 @@ mascaras = {
 
 # --- Ângulos dos servos ---
 posicoes = {
-    "homem_de_ferro": {"vertical": {"cima":120,"centro":90,"baixo":60},
-                        "horizontal":{"esquerda":60,"centro":90,"direita":120}},
-    "transformers": {"vertical":{"cima":130,"centro":100,"baixo":70},
-                     "horizontal":{"esquerda":70,"centro":100,"direita":130}},
+    "homem_de_ferro": {"vertical": {"cima":172,"centro":155,"baixo":124},
+                        "horizontal":{"esquerda":55,"centro":100,"direita":141}},
+    "transformers": {"vertical":{"cima":66,"centro":73,"baixo":124},
+                     "horizontal":{"esquerda":85,"centro":37,"direita":0}},
     "homem_aranha": {"vertical":{"cima":110,"centro":90,"baixo":70},
                       "horizontal":{"esquerda":50,"centro":90,"direita":130}},
     "minions": {"vertical":{"cima":125,"centro":95,"baixo":65},
@@ -51,11 +52,54 @@ def palma_frente(hand_landmarks):
     # Polegar e punho para determinar se palma frente ou trás
     return hand_landmarks.landmark[0].z < hand_landmarks.landmark[9].z
 
+# Variável para armazenar posições atuais dos servos
+posicoes_atuais = {}
+
+def inicializar_posicoes():
+    """Inicializa as posições atuais dos servos"""
+    for mascara in mascaras:
+        for eixo in mascaras[mascara]:
+            servo_id = mascaras[mascara][eixo]
+            # Posição inicial no centro
+            posicoes_atuais[servo_id] = posicoes[mascara][eixo]["centro"]
+            kit.servo[servo_id].angle = posicoes_atuais[servo_id]
+    time.sleep(1)  # Aguarda estabilização inicial
+
+def mover_servo_suave(servo_id, angulo_destino, passo=2, delay=0.02):
+    """Move o servo suavemente de 2 em 2 graus"""
+    if servo_id not in posicoes_atuais:
+        posicoes_atuais[servo_id] = kit.servo[servo_id].angle or 90
+    
+    angulo_atual = posicoes_atuais[servo_id]
+    
+    # Calcula a direção do movimento
+    if angulo_atual < angulo_destino:
+        # Movimento crescente
+        for angulo in range(int(angulo_atual), int(angulo_destino) + 1, passo):
+            kit.servo[servo_id].angle = angulo
+            posicoes_atuais[servo_id] = angulo
+            time.sleep(delay)
+    elif angulo_atual > angulo_destino:
+        # Movimento decrescente
+        for angulo in range(int(angulo_atual), int(angulo_destino) - 1, -passo):
+            kit.servo[servo_id].angle = angulo
+            posicoes_atuais[servo_id] = angulo
+            time.sleep(delay)
+    
+    # Garante que chegue exatamente no destino
+    kit.servo[servo_id].angle = angulo_destino
+    posicoes_atuais[servo_id] = angulo_destino
+
 def mover_mascara(nome, eixo, direcao):
-    servo = mascaras[nome][eixo]
-    angulo = posicoes[nome][eixo][direcao]
-    kit.servo[servo].angle = angulo
+    servo_id = mascaras[nome][eixo]
+    angulo_destino = posicoes[nome][eixo][direcao]
+    mover_servo_suave(servo_id, angulo_destino)
     print(f"{nome} olhando {direcao} ({eixo})")
+
+# --- Inicialização ---
+print("Inicializando servos...")
+inicializar_posicoes()
+print("Servos inicializados!")
 
 # --- Captura de vídeo ---
 cap = cv2.VideoCapture(0)
