@@ -48,17 +48,17 @@ def contar_dedos(hand_landmarks, hand_label):
     thumb_tip = hand_landmarks.landmark[4]
     thumb_mcp = hand_landmarks.landmark[2]
     
-    # Polegar aberto se a distância horizontal for significativa
+    # Polegar aberto se a distância horizontal for significativa (limiar reduzido)
     thumb_distance = abs(thumb_tip.x - thumb_mcp.x)
-    dedos.append(1 if thumb_distance > 0.04 else 0)
+    dedos.append(1 if thumb_distance > 0.025 else 0)
     
     # Demais dedos - comparação vertical simples
     tip_ids = [8, 12, 16, 20]  # Indicador, médio, anelar, mindinho
     mcp_ids = [5, 9, 13, 17]   # Articulações da base (mais confiável)
     
     for tip, mcp in zip(tip_ids, mcp_ids):
-        # Dedo levantado se a ponta está significativamente acima da base
-        if hand_landmarks.landmark[tip].y < hand_landmarks.landmark[mcp].y - 0.02:
+        # Dedo levantado se a ponta está significativamente acima da base (limiar reduzido)
+        if hand_landmarks.landmark[tip].y < hand_landmarks.landmark[mcp].y - 0.015:
             dedos.append(1)
         else:
             dedos.append(0)
@@ -164,8 +164,8 @@ while True:
             if gesto_estavel:
                 if dedos == 0:
                     acao = "→ DIREITA (MÃO FECHADA)"
-                elif dedos == 5:
-                    acao = "→ ESQUERDA (MÃO ABERTA)"
+                elif dedos >= 4:  # Aceita 4 ou 5 dedos como mão aberta
+                    acao = f"→ ESQUERDA (MÃO ABERTA - {dedos} dedos)"
                 else:
                     acao = f"→ SEM AÇÃO ({dedos} dedos)"
             else:
@@ -187,8 +187,8 @@ while True:
                     for mascara in mascaras:
                         mover_mascara(mascara, "horizontal", "direita")
                 
-                # Mão aberta (5 dedos) = girar todos para ESQUERDA
-                elif dedos == 5:
+                # Mão aberta (4 ou 5 dedos) = girar todos para ESQUERDA
+                elif dedos >= 4:
                     for mascara in mascaras:
                         mover_mascara(mascara, "horizontal", "esquerda")
 
