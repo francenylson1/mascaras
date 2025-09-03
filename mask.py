@@ -173,33 +173,33 @@ while True:
             # Exibir informações de debug
             status = "ESTÁVEL" if gesto_estavel else f"DETECTANDO ({ultima_deteccao[hand_label]['contador']})"
             
-            # Determinar ação baseada no gesto
-            acao = ""
-            if gesto_estavel:
-                if dedos == 0:
-                    acao = "→ ESQUERDA/BAIXO"
-                elif dedos == 5:
-                    acao = "→ DIREITA/CIMA"
-                else:
-                    acao = "→ SEM AÇÃO"
+            # Determinar ação baseada no gesto (apenas mão direita)
+             acao = ""
+             if gesto_estavel and hand_label == "Right":
+                 if dedos == 0:
+                     acao = "→ DIREITA"
+                 elif dedos == 5:
+                     acao = "→ ESQUERDA"
+                 else:
+                     acao = "→ SEM AÇÃO"
+             elif hand_label == "Left":
+                 acao = "→ INATIVA"
             
             cv2.putText(frame, f"{hand_label}: {dedos} dedos - {status} {acao}", 
                        (10, 30 if hand_label == "Right" else 60), 
                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0) if gesto_estavel else (0, 255, 255), 2)
 
-            # Controle simplificado por gestos estáveis
-            if gesto_estavel:
-                # Mão fechada (0 dedos) = girar todos para ESQUERDA
+            # Controle simplificado apenas com mão direita
+            if gesto_estavel and hand_label == "Right":
+                # Mão direita fechada (0 dedos) = girar todos para DIREITA
                 if dedos == 0:
                     for mascara in mascaras:
-                        mover_mascara(mascara, "horizontal", "esquerda")
-                        mover_mascara(mascara, "vertical", "baixo")
+                        mover_mascara(mascara, "horizontal", "direita")
                 
-                # Mão aberta (5 dedos) = girar todos para DIREITA
+                # Mão direita aberta (5 dedos) = girar todos para ESQUERDA
                 elif dedos == 5:
                     for mascara in mascaras:
-                        mover_mascara(mascara, "horizontal", "direita")
-                        mover_mascara(mascara, "vertical", "cima")
+                        mover_mascara(mascara, "horizontal", "esquerda")
 
     cv2.imshow("Controle SuperHeroi", frame)
     if cv2.waitKey(1) & 0xFF == 27:
