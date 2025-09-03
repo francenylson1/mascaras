@@ -170,39 +170,36 @@ while True:
                 ultima_deteccao[hand_label]["frente"] = frente
                 ultima_deteccao[hand_label]["contador"] = 1
             
-            # Debug: mostrar informações na tela
+            # Exibir informações de debug
             status = "ESTÁVEL" if gesto_estavel else f"DETECTANDO ({ultima_deteccao[hand_label]['contador']})"
-            cv2.putText(frame, f"{hand_label}: {dedos} dedos - {lado} - {status}", 
+            
+            # Determinar ação baseada no gesto
+            acao = ""
+            if gesto_estavel:
+                if dedos == 0:
+                    acao = "→ ESQUERDA/BAIXO"
+                elif dedos == 5:
+                    acao = "→ DIREITA/CIMA"
+                else:
+                    acao = "→ SEM AÇÃO"
+            
+            cv2.putText(frame, f"{hand_label}: {dedos} dedos - {status} {acao}", 
                        (10, 30 if hand_label == "Right" else 60), 
                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0) if gesto_estavel else (0, 255, 255), 2)
 
-            # Executar movimento apenas se gesto estiver estável
-            if gesto_estavel and dedos > 0:
-                # --- Mão Direita: horizontal ---
-                if hand_label == "Right":
-                    if dedos == 1:
-                        mover_mascara("homem_de_ferro", "horizontal", lado)
-                    elif dedos == 2:
-                        mover_mascara("transformers", "horizontal", lado)
-                    elif dedos == 3:
-                        mover_mascara("homem_aranha", "horizontal", lado)
-                    elif dedos == 4:
-                        mover_mascara("minions", "horizontal", lado)
-                    elif dedos == 5:
-                        mover_mascara("hulk", "horizontal", lado)
-
-                # --- Mão Esquerda: vertical ---
-                elif hand_label == "Left":
-                    if dedos == 1:
-                        mover_mascara("homem_de_ferro", "vertical", "cima" if frente else "baixo")
-                    elif dedos == 2:
-                        mover_mascara("transformers", "vertical", "cima" if frente else "baixo")
-                    elif dedos == 3:
-                        mover_mascara("homem_aranha", "vertical", "cima" if frente else "baixo")
-                    elif dedos == 4:
-                        mover_mascara("minions", "vertical", "cima" if frente else "baixo")
-                    elif dedos == 5:
-                        mover_mascara("hulk", "vertical", "cima" if frente else "baixo")
+            # Controle simplificado por gestos estáveis
+            if gesto_estavel:
+                # Mão fechada (0 dedos) = girar todos para ESQUERDA
+                if dedos == 0:
+                    for mascara in mascaras:
+                        mover_mascara(mascara, "horizontal", "esquerda")
+                        mover_mascara(mascara, "vertical", "baixo")
+                
+                # Mão aberta (5 dedos) = girar todos para DIREITA
+                elif dedos == 5:
+                    for mascara in mascaras:
+                        mover_mascara(mascara, "horizontal", "direita")
+                        mover_mascara(mascara, "vertical", "cima")
 
     cv2.imshow("Controle SuperHeroi", frame)
     if cv2.waitKey(1) & 0xFF == 27:
