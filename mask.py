@@ -44,21 +44,21 @@ hands = mp_hands.Hands(
 def contar_dedos(hand_landmarks, hand_label):
     dedos = []
     
-    # Polegar - ajuste baseado na mão (esquerda/direita)
-    if hand_label == "Right":
-        # Mão direita: polegar levantado se x4 > x3
-        dedos.append(1 if hand_landmarks.landmark[4].x > hand_landmarks.landmark[3].x else 0)
-    else:
-        # Mão esquerda: polegar levantado se x4 < x3
-        dedos.append(1 if hand_landmarks.landmark[4].x < hand_landmarks.landmark[3].x else 0)
+    # Polegar - detecção simplificada baseada na distância horizontal
+    thumb_tip = hand_landmarks.landmark[4]
+    thumb_mcp = hand_landmarks.landmark[2]
     
-    # Demais dedos - comparação mais precisa
+    # Polegar aberto se a distância horizontal for significativa
+    thumb_distance = abs(thumb_tip.x - thumb_mcp.x)
+    dedos.append(1 if thumb_distance > 0.04 else 0)
+    
+    # Demais dedos - comparação vertical simples
     tip_ids = [8, 12, 16, 20]  # Indicador, médio, anelar, mindinho
-    pip_ids = [6, 10, 14, 18]  # Articulações intermediárias
+    mcp_ids = [5, 9, 13, 17]   # Articulações da base (mais confiável)
     
-    for tip, pip in zip(tip_ids, pip_ids):
-        # Dedo levantado se a ponta está acima da articulação intermediária
-        if hand_landmarks.landmark[tip].y < hand_landmarks.landmark[pip].y:
+    for tip, mcp in zip(tip_ids, mcp_ids):
+        # Dedo levantado se a ponta está significativamente acima da base
+        if hand_landmarks.landmark[tip].y < hand_landmarks.landmark[mcp].y - 0.02:
             dedos.append(1)
         else:
             dedos.append(0)
@@ -66,23 +66,9 @@ def contar_dedos(hand_landmarks, hand_label):
     return sum(dedos)
 
 def palma_frente(hand_landmarks, hand_label):
-    # Análise mais robusta da orientação da palma
-    # Usando múltiples pontos de referência
-    wrist = hand_landmarks.landmark[0]  # Punho
-    middle_mcp = hand_landmarks.landmark[9]  # Base do dedo médio
-    thumb_tip = hand_landmarks.landmark[4]  # Ponta do polegar
-    
-    # Combinação de análises Z e posição relativa do polegar
-    z_analysis = wrist.z < middle_mcp.z
-    
-    # Análise adicional baseada na posição do polegar
-    if hand_label == "Right":
-        thumb_analysis = thumb_tip.x > wrist.x
-    else:
-        thumb_analysis = thumb_tip.x < wrist.x
-    
-    # Combina ambas as análises para maior precisão
-    return z_analysis and thumb_analysis
+    # Simplificado: sempre retorna True para focar apenas na contagem de dedos
+    # Removemos a complexidade da orientação da palma
+    return True
 
 # Variáveis para armazenar posições atuais dos servos e estabilização
 posicoes_atuais = {}
@@ -173,30 +159,35 @@ while True:
             # Exibir informações de debug
             status = "ESTÁVEL" if gesto_estavel else f"DETECTANDO ({ultima_deteccao[hand_label]['contador']})"
             
-            # Determinar ação baseada no gesto (apenas mão direita)
+            # Determinar ação baseada no gesto (qualquer mão)
             acao = ""
-            if gesto_estavel and hand_label == "Right":
+            if gesto_estavel:
                 if dedos == 0:
-                    acao = "→ DIREITA"
+                    acao = "→ DIREITA (MÃO FECHADA)"
                 elif dedos == 5:
-                    acao = "→ ESQUERDA"
+                    acao = "→ ESQUERDA (MÃO ABERTA)"
                 else:
-                    acao = "→ SEM AÇÃO"
-            elif hand_label == "Left":
-                acao = "→ INATIVA"
+                    acao = f"→ SEM AÇÃO ({dedos} dedos)"
+            else:
+                acao = "→ DETECTANDO..."
             
-            cv2.putText(frame, f"{hand_label}: {dedos} dedos - {status} {acao}", 
+            # Debug detalhado
+            thumb_distance = abs(hand_landmarks.landmark[4].x - hand_landmarks.landmark[2].x)
+            cv2.putText(frame, f"{hand_label}: {dedos} dedos - {status}", 
                        (10, 30 if hand_label == "Right" else 60), 
                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0) if gesto_estavel else (0, 255, 255), 2)
+            cv2.putText(frame, f"Polegar dist: {thumb_distance:.3f} - {acao}", 
+                       (10, 50 if hand_label == "Right" else 80), 
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 0), 1)
 
-            # Controle simplificado apenas com mão direita
-            if gesto_estavel and hand_label == "Right":
-                # Mão direita fechada (0 dedos) = girar todos para DIREITA
+            # Controle com qualquer mão
+            if gesto_estavel:
+                # Mão fechada (0 dedos) = girar todos para DIREITA
                 if dedos == 0:
                     for mascara in mascaras:
                         mover_mascara(mascara, "horizontal", "direita")
                 
-                # Mão direita aberta (5 dedos) = girar todos para ESQUERDA
+                # Mão aberta (5 dedos) = girar todos para ESQUERDA
                 elif dedos == 5:
                     for mascara in mascaras:
                         mover_mascara(mascara, "horizontal", "esquerda")
