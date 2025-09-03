@@ -33,27 +33,62 @@ posicoes = {
 # --- MediaPipe Config ---
 mp_hands = mp.solutions.hands
 mp_drawing = mp.solutions.drawing_utils
-hands = mp_hands.Hands(min_detection_confidence=0.7, min_tracking_confidence=0.7)
+hands = mp_hands.Hands(
+    static_image_mode=False,
+    max_num_hands=2,
+    min_detection_confidence=0.8,
+    min_tracking_confidence=0.8
+)
 
 # --- Funções auxiliares ---
-def contar_dedos(hand_landmarks):
+def contar_dedos(hand_landmarks, hand_label):
     dedos = []
-    # Polegar
-    dedos.append(hand_landmarks.landmark[4].x < hand_landmarks.landmark[3].x if hand_landmarks.landmark[4].x > hand_landmarks.landmark[3].x else hand_landmarks.landmark[4].x > hand_landmarks.landmark[3].x)
-    # Demais dedos
-    for tip in [8, 12, 16, 20]:
-        if hand_landmarks.landmark[tip].y < hand_landmarks.landmark[tip-2].y:
+    
+    # Polegar - ajuste baseado na mão (esquerda/direita)
+    if hand_label == "Right":
+        # Mão direita: polegar levantado se x4 > x3
+        dedos.append(1 if hand_landmarks.landmark[4].x > hand_landmarks.landmark[3].x else 0)
+    else:
+        # Mão esquerda: polegar levantado se x4 < x3
+        dedos.append(1 if hand_landmarks.landmark[4].x < hand_landmarks.landmark[3].x else 0)
+    
+    # Demais dedos - comparação mais precisa
+    tip_ids = [8, 12, 16, 20]  # Indicador, médio, anelar, mindinho
+    pip_ids = [6, 10, 14, 18]  # Articulações intermediárias
+    
+    for tip, pip in zip(tip_ids, pip_ids):
+        # Dedo levantado se a ponta está acima da articulação intermediária
+        if hand_landmarks.landmark[tip].y < hand_landmarks.landmark[pip].y:
             dedos.append(1)
         else:
             dedos.append(0)
+    
     return sum(dedos)
 
-def palma_frente(hand_landmarks):
-    # Polegar e punho para determinar se palma frente ou trás
-    return hand_landmarks.landmark[0].z < hand_landmarks.landmark[9].z
+def palma_frente(hand_landmarks, hand_label):
+    # Análise mais robusta da orientação da palma
+    # Usando múltiples pontos de referência
+    wrist = hand_landmarks.landmark[0]  # Punho
+    middle_mcp = hand_landmarks.landmark[9]  # Base do dedo médio
+    thumb_tip = hand_landmarks.landmark[4]  # Ponta do polegar
+    
+    # Combinação de análises Z e posição relativa do polegar
+    z_analysis = wrist.z < middle_mcp.z
+    
+    # Análise adicional baseada na posição do polegar
+    if hand_label == "Right":
+        thumb_analysis = thumb_tip.x > wrist.x
+    else:
+        thumb_analysis = thumb_tip.x < wrist.x
+    
+    # Combina ambas as análises para maior precisão
+    return z_analysis and thumb_analysis
 
-# Variável para armazenar posições atuais dos servos
+# Variáveis para armazenar posições atuais dos servos e estabilização
 posicoes_atuais = {}
+ultima_deteccao = {"Right": {"dedos": 0, "frente": False, "contador": 0}, 
+                   "Left": {"dedos": 0, "frente": False, "contador": 0}}
+MIN_FRAMES_ESTABILIZACAO = 3  # Número mínimo de frames para confirmar gesto
 
 def inicializar_posicoes():
     """Inicializa as posições atuais dos servos"""
@@ -115,38 +150,59 @@ while True:
         for hand_landmarks, hand_class in zip(results.multi_hand_landmarks, results.multi_handedness):
             mp_drawing.draw_landmarks(frame, hand_landmarks, mp_hands.HAND_CONNECTIONS)
 
-            dedos = contar_dedos(hand_landmarks)
-            frente = palma_frente(hand_landmarks)
-            lado = "direita" if frente else "esquerda"
-
             # Determinar qual mão
             hand_label = hand_class.classification[0].label  # "Left" ou "Right"
+            
+            # Contar dedos e detectar orientação com maior precisão
+            dedos = contar_dedos(hand_landmarks, hand_label)
+            frente = palma_frente(hand_landmarks, hand_label)
+            lado = "direita" if frente else "esquerda"
+            
+            # Sistema de estabilização - confirma gesto apenas após frames consecutivos
+            gesto_estavel = False
+            if (ultima_deteccao[hand_label]["dedos"] == dedos and 
+                ultima_deteccao[hand_label]["frente"] == frente):
+                ultima_deteccao[hand_label]["contador"] += 1
+                if ultima_deteccao[hand_label]["contador"] >= MIN_FRAMES_ESTABILIZACAO:
+                    gesto_estavel = True
+            else:
+                ultima_deteccao[hand_label]["dedos"] = dedos
+                ultima_deteccao[hand_label]["frente"] = frente
+                ultima_deteccao[hand_label]["contador"] = 1
+            
+            # Debug: mostrar informações na tela
+            status = "ESTÁVEL" if gesto_estavel else f"DETECTANDO ({ultima_deteccao[hand_label]['contador']})"
+            cv2.putText(frame, f"{hand_label}: {dedos} dedos - {lado} - {status}", 
+                       (10, 30 if hand_label == "Right" else 60), 
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0) if gesto_estavel else (0, 255, 255), 2)
 
-            # --- Mão Direita: horizontal ---
-            if hand_label == "Right":
-                if dedos == 1:
-                    mover_mascara("homem_de_ferro", "horizontal", lado)
-                elif dedos == 2:
-                    mover_mascara("transformers", "horizontal", lado)
-                elif dedos == 3:
-                    mover_mascara("homem_aranha", "horizontal", lado)
-                elif dedos == 4:
-                    mover_mascara("minions", "horizontal", lado)
-                elif dedos == 5:
-                    mover_mascara("hulk", "horizontal", lado)
+            # Executar movimento apenas se gesto estiver estável
+            if gesto_estavel and dedos > 0:
+                # --- Mão Direita: horizontal ---
+                if hand_label == "Right":
+                    if dedos == 1:
+                        mover_mascara("homem_de_ferro", "horizontal", lado)
+                    elif dedos == 2:
+                        mover_mascara("transformers", "horizontal", lado)
+                    elif dedos == 3:
+                        mover_mascara("homem_aranha", "horizontal", lado)
+                    elif dedos == 4:
+                        mover_mascara("minions", "horizontal", lado)
+                    elif dedos == 5:
+                        mover_mascara("hulk", "horizontal", lado)
 
-            # --- Mão Esquerda: vertical ---
-            elif hand_label == "Left":
-                if dedos == 1:
-                    mover_mascara("homem_de_ferro", "vertical", "cima" if frente else "baixo")
-                elif dedos == 2:
-                    mover_mascara("transformers", "vertical", "cima" if frente else "baixo")
-                elif dedos == 3:
-                    mover_mascara("homem_aranha", "vertical", "cima" if frente else "baixo")
-                elif dedos == 4:
-                    mover_mascara("minions", "vertical", "cima" if frente else "baixo")
-                elif dedos == 5:
-                    mover_mascara("hulk", "vertical", "cima" if frente else "baixo")
+                # --- Mão Esquerda: vertical ---
+                elif hand_label == "Left":
+                    if dedos == 1:
+                        mover_mascara("homem_de_ferro", "vertical", "cima" if frente else "baixo")
+                    elif dedos == 2:
+                        mover_mascara("transformers", "vertical", "cima" if frente else "baixo")
+                    elif dedos == 3:
+                        mover_mascara("homem_aranha", "vertical", "cima" if frente else "baixo")
+                    elif dedos == 4:
+                        mover_mascara("minions", "vertical", "cima" if frente else "baixo")
+                    elif dedos == 5:
+                        mover_mascara("hulk", "vertical", "cima" if frente else "baixo")
 
     cv2.imshow("Controle SuperHeroi", frame)
     if cv2.waitKey(1) & 0xFF == 27:
